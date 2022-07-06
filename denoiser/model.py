@@ -1,6 +1,14 @@
 """
 contains the code for experimental denoiser models
 UNet and the UNet family
+
+TODO
+(1) ResUNet
+(2) UNet
+(3) UNetPP
+(4) AttUNet
+(5) ASPPUNet
+(6) NBNet
 """
 NN_ARCHS = [
     "unet", "unetpp", "resunet", 
