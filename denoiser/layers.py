@@ -1,6 +1,11 @@
 """
 contains the code for common layers to implement 
 ASPP / SSA Module / ResBlock etc..
+
+TODO
+(1) SSA Module
+(2) ASPP Module
+
 """
 import torch
 import torch.nn as nn
