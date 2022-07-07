@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 
 # Fusion Net는 말 SNR (Signal To Noise Ratio)를 학습한다.
-
+# DNCNN도 역시나 denoiser model로서 사용할 수 있을 것이다.
 class DNCNN(nn.Module):
   # A denoising Network only based on the CNN Layer with kernel size = 3 and No Padding
   # Predicts the Noise Values in the Noisy Input Image

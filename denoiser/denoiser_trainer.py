@@ -173,7 +173,7 @@ class AIMSDenoiserTrainer(AIMSTrainer):
             clone_model = copy.deepcopy(self.model)
             sample_input = torch.zeros(
                 (1, 1, self.default_size, self.default_size)).cuda()
-            for half in [False, True]:
+            for half in [False]: #[False, True]:
                 clone_model = clone_model.half() if half else clone_model.float(
                 )
                 sample_input = sample_input.half(
@@ -197,7 +197,7 @@ class AIMSDenoiserTrainer(AIMSTrainer):
                     "path": os.path.basename(output_name)
                 },
                 "input-data": {
-                    "data-type": "half",
+                    "data-type": "full",
                     "normalization": {
                         "type": "default-norm",
                         "mean": 0.5,
