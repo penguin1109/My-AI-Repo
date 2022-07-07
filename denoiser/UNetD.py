@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from layers import *
 
 def conv1x1(ch_in, ch_out):
     model = nn.Conv2d(ch_in, ch_out, kernel_size = 1, stride=1, padding = 0, bias = True)
@@ -95,13 +96,12 @@ class UNetConvBlock(nn.Module):
 
 
 class UNetUpBlock(nn.Module):
-
     def __init__(self, in_size, out_size, relu_slope, subnet_repeat_num, subspace_dim=16):
         super(UNetUpBlock, self).__init__()
         self.up = nn.ConvTranspose2d(in_size, out_size, kernel_size=2, stride=2, bias=True)
         self.conv_block = UNetConvBlock(in_size, out_size, False, relu_slope)
         self.num_subspace = subspace_dim
-       # print(self.num_subspace, subnet_repeat_num)
+        
         self.subnet = Subspace(in_size, self.num_subspace)
         self.skip_m = skip_blocks(out_size, out_size, subnet_repeat_num)
 
@@ -164,8 +164,56 @@ class skip_blocks(nn.Module):
         return x + sc
 
 
+class NBNet(nn.Module):
+    def __init__(self, ch_in, scale = 32, depth = 5, relu_slope = 0.2, subspace_dim = 16):
+        super(NBNet, self).__init__()
+        self.depth = depth
+        self.down_pth = []
+        prev_channels = ch_in
+        # [1(input) -> 32(1st) -> 64(2nd) -> 128(3rd) -> 256(4th)]
+        for i in range(depth):
+            downsample = True if (i+1) < depth else False ## 1, 2, 3, 4에 대해서만 down-sample
+            self.down_pth.append(nbnet_conv_block(prev_channels, (2**i)*scale, downsample = downsample))
+            prev_channels = (2**i)*scale
+            
+        self.up_pth = [];subnet_rep_num = 1;
+        for i in reversed(range(depth-1)):
+            self.up_pth.append(nbnet_upblock(prev_channels, (2**i)*scale,subnet_rep_num, subspace_dim))
+            prev_channels = (2**i)*scale
+            subnet_rep_num += 1
+        self.tail = conv3x3(prev_channels, ch_in,)
+        self.down_pth = nn.ModuleList(self.down_pth)
+        self.up_pth = nn.ModuleList(self.up_pth)
+        
+    def forward(self, x):
+        blocks = []
+        for i, down in enumerate(self.down_pth):
+            if (i + 1) < self.depth: # downsample O
+                x, x_up = down(x) # (encoder input, skip connection input)
+                blocks.append(x_up)
+            else: # downsample X
+                x = down(x)  
+        # x = [B, 512, W, H]
+        for i, up in enumerate(self.up_pth):
+            x = up(x, blocks[-i-1])
+
+        output = self.tail(x)
+        return output
+
+    def init_weight(self):
+        for module in self.modules():
+            if isinstance(module, nn.Conv2d):
+                nn.init.xaviar_uniform_(module.weight)
+                if module.bias is not None:
+                    nn.init.zeros_(module.bias)
+                    
+                    
+
 if __name__ == "__main__":
     sample = torch.zeros((2, 1, 512, 512))
-    net= UNetD(1)
-    out = net(sample)
-    print(out.shape)
+    net1= UNetD(1)
+    net2 = NBNet(1)
+    # print(net1)
+    print(net2)
+    #out = net(sample)
+    #print(out.shape)
