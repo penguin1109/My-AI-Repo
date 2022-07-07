@@ -1,18 +1,19 @@
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
 import math
 
 def gaussian(ksize,sigma):
     """fnc for creating the gaussian distribution for a given matrix with (ksize x ksize)"""
-    gauss = torch.Tensor([math.exp(-(x-ksize//2)**2) / float(2*sigma**2)])
+    gauss = torch.Tensor([math.exp(-(x-ksize//2)**2 / float(2*sigma**2)) for x in range(ksize)])
     return gauss / gauss.sum() # Normalize to range [0-1]
 
 
 def create_window(ksize, channel):
-    1D_window = gaussian(ksize, 1.5).unsqueeze(1)
-    2D_window = 1D_window.mm(1D_window.t()).float().unsqueeze(0).unsqueeze(0)
-    window = Variable(2D_window.expand(channel, 1, ksize, ksize))
+    one_window = gaussian(ksize, 1.5).unsqueeze(1)
+    two_window = one_window.mm(one_window.t()).float().unsqueeze(0).unsqueeze(0)
+    window = Variable(two_window.expand(channel, 1, ksize, ksize))
     return window
 
 def _ssim(img1, img2, window, ksize, channel, size_average = True):
@@ -36,11 +37,41 @@ def _ssim(img1, img2, window, ksize, channel, size_average = True):
     else:
         return ssim_map.mean(1).mean(1).mean(1)
 
-def ssim(img1, img2, ksize = 11, size_average = True):
+def ssim_loss(img1, img2, ksize = 11, size_average = True):
     B, C, W, H = img1.size()
     window = create_window(ksize, C)
     if img1.is_cuda:
         window = window.cuda(img1.get_device())
     window = window.type_as(img1)
-    return _ssim(img1, img2, window, ksize, channel, size_average)
+    ssim = _ssim(img1, img2, window, ksize, channel, size_average)
+    return 1 - simm ## loss function이니까 score을 1에서 빼주어야 한다.
 
+
+class SSIMLoss(nn.Module):
+    def __init__(self, ksize = 11, size_average = True):
+        super(SSIMLoss, self).__init__()
+        self.ksize = ksize
+        self.size_average = size_average
+        self.channel = 1
+        self.window = create_window(ksize, self.channel)
+    def forward(self, pred, targ):
+        B, C, W, H = pred.size()
+        if C == self.channel and self.window.data.type() == pred.data.type():
+            window = self.window
+        else:
+            window = create_window(self.ksize, C)
+            if pred.is_cuda:
+                window = window.cuda(pred.get_device())
+            window = window.type_as(pred)
+            self.window = window
+            self.channel = channel
+            
+        return 1-_ssim(pred, targ, self.window,self.ksize, self.channel, self.size_average)
+
+if __name__ == "__main__":
+    img1 = torch.ones(size = (2, 1, 512, 512))
+    img2 = torch.ones(size = (2, 1, 512, 512))
+    ssimloss = SSIMLoss()
+    loss = ssimloss(img1, img2) ## 정상적으로 계산이 되면 loss = 0이어야 함
+    # 왜냐면 같은 matrix라서 ssim = 1.0이어야 하기 때문이다.
+    print(loss)
