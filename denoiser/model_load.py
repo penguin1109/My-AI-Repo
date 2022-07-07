@@ -8,8 +8,8 @@ TODO
 (2) UNet
 (3) UNetPP
 (4) AttUNet
-(5) ASPPUNet
-(6) NBNet
+(5) ASPPUNet 
+(6) NBNet (O)
 """
 NN_ARCHS = [
     "unet", "unetpp", "resunet", 
