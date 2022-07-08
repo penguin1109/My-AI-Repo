@@ -5,11 +5,13 @@ import torch.nn.functional as F
 """
 unet.py
 TODO
-(1) Implement a simple UNet (Most Basic)
+(1) Implement a simple UNet (Most Basic) (O)
 (2) Implement a UNet with FiLM Layers (Noise Conditional Training)
 (3) Implement a UNet++ (With Super Vision)
 (4) Implement a UNet with Attention
+(5) Implement a UNet with the Residual Block 
 """
+
 class encoding_block(nn.Module):
     def __init__(self,  ch_in, ch_out, ksize = 3, padding = 0, stride = 1, dilation = 1, bn = False):
         super(encoding_block, self).__init__()
@@ -52,6 +54,7 @@ class decoding_block(nn.Module):
         return self.conv(torch.cat([out1, out2], dim = 1))
         
 class UNet(nn.Module):
+    ## Simple UNet without the Residual Block
     def __init__(self, ch_in = 1):
         super(UNet, self).__init__()
         feat_n = 32
