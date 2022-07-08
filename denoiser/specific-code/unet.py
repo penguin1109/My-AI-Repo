@@ -1,4 +1,4 @@
-from layers import *
+from .layers import *
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -10,6 +10,70 @@ TODO
 (3) Implement a UNet++ (With Super Vision)
 (4) Implement a UNet with Attention
 """
+class ResConv(nn.Module):
+    def __init__(self, ch_in, ch_out, stride):
+        super(ResConv, self).__init__()
+        self.conv_block = nn.Sequential(
+            nn.BatchNorm2d(ch_in),
+            nn.ReLU(inplace = True),
+            nn.Conv2d(ch_in, ch_out, kernrel_size = 3, stride = stride, padding = 1), # Downsample
+            nn.BatchNorm2d(ch_out),
+            nn.ReLU(inplace = True),
+            nn.Conv2d(ch_out, ch_out, kernel_size = 3, stride = 1, padding = 1) # Constant Size
+        )
+        self.conv_skip = nn.Sequential(
+            nn.Conv2d(ch_in, ch_out, kernel_size = 3, stride = stride, padding = 1),
+            nn.BatchNorm2d(ch_out)
+        )
+    def forward(self, x):
+        skip = self.conv_skip(x)
+        conv = self.conv_block(x)
+        return conv + skip
+
+
+class ResUNet(nn.Module):
+    def __init__(self,channel  =1, channels = [16, 32, 64, 128]):
+        super(ResUNet, self).__init__()
+        self.head = nn.Sequential(
+            nn.Conv2d(channel, channels[0], kernel_size = 3, padding = 1, stride = 1),
+            nn.BatchNorm2d(channels[0]),
+            nn.ReLU(),
+            nn.Conv2d(channels[0], channels[1], kernel_size = 3, padding = 1, stride = 1),
+        )
+        self.head_skip = nn.Conv2d(channel, channels[0], kernel_size = 3, stride = 1, padding = 1)
+        self.resconv_1 = ResConv(channels[0], channels[1], 2)
+        self.resconv_2 = ResConv(channels[1], channels[2], 2)
+        self.bridge = ResConv(channels[2], channels[3], 2)
+        
+        self.up_1 = nn.Upsample(channels[3], scale_factor = 2, mode = 'bilinear')
+        self.upres_1 = ResConv(channels[3] + channels[2], channels[2], 1)
+        self.up_2 = nn.Upsample(channels[2], scale_factor = 2, mode = 'bilinear')
+        self.upres_2 = ResConv(channels[2]+channels[1], channels[1], 1)
+        self.up_3 = nn.Upsample(channels[1], scale_factor = 2, mode = 'bilinear')
+        self.upres_3 = ResConv(channels[1] + channels[0], scale_factor= 2, mode ='bilinear')
+
+        self.tail = nn.Sequential(
+            nn.Conv2d(channels[0], kernel_size = 1, stride = 1, padding = 0),
+            nn.Sigmoid()
+        )
+    def forward(self, x):
+        head = self.head(x) + self.head_skip()
+        x1 = self.resconv_1(head)
+        x2 = self.resconv_2(x1)
+        bridge = self.bridge(x2)
+        bridge = self.up_1(bridge)
+        x3 = torch.cat([bridge, x1], dim=1)
+        x4 = self.upres_1(x3)
+        x4 = self.up_2(x4)
+        x5 = torch.cat([x4, x2], dim = 1)
+        x6 = self.upres_2(x5)
+        x6 = self.up_3(x6)
+        x7 = torch.cat([x6, x1], dim = 1)
+        x8 = self.upres_3(x7)
+        tail = self.tail(x8)
+        return tail
+
+
 class encoding_block(nn.Module):
     def __init__(self,  ch_in, ch_out, ksize = 3, padding = 0, stride = 1, dilation = 1, bn = False):
         super(encoding_block, self).__init__()
@@ -99,10 +163,3 @@ class UNet(nn.Module):
         
         tail = F.upsample(self.tail(dec1), x.size()[2:], mode = 'bilinear')
         return tail
-    
-if __name__ == "__main__":
-    sample = torch.ones((2, 1, 512, 512))
-    net = UNet()
-    output = net(sample)
-    print(output.shape)
-        
