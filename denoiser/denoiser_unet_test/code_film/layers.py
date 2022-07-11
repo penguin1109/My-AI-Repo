@@ -1,86 +1,72 @@
-## denoiser_unet_test/code_film/film_unet.py
+## denoiser_unet_test/code_film/layers.py
 import torch
 import torch.nn as nn
 
-class UNetConvBlock(nn.Module):
-  ## Convolution block for the encoder of the UNet
-  def __init__(self, ch_in, ch_out, film , dec, final = False):
-    super(UNetConvBlock, self).__init__()
-    layers = []
-    self.final = final
-    self.film = film
-    self.dec = dec ## decoder이면 concat = True / 아니면 concat = False
-    if self.film:
-      if self.dec:
-        self.film_layer = FiLMLayer(ch_out, concat = self.dec)
-      else:
-        self.film_layer = FiLMLayer(ch_in, concat = self.dec)
-    self.layer1 = nn.Sequential(
-        nn.Conv2d(ch_in, ch_out, kernel_size = 3, stride = 1, padding = 1, bias = True),
-        nn.InstanceNorm2d(ch_out),
-        nn.Tanh()
-    )
-    if self.final:
-      self.layer2 = nn.Sequential(
-          nn.Conv2d(ch_out, 1, kernel_size = 3, stride = 1, padding = 1, bias = True),
-          nn.InstanceNorm2d(1),
-          nn.Tanh()
-      )
+def conv(channel_in, channel_out, kernel_size, stride, padding):
+  return nn.Sequential(
+      nn.Conv2d(channel_in, channel_out, kernel_size, stride, padding),
+      nn.ReLU(inplace = True),
+      nn.BatchNorm2d(channel_out)
+  )
+  
+class FeatureExtractor(nn.Module):
+  def __init__(self, ch_in, concat):
+    super(FeatureExtractor,self).__init__()
+    self.concat = concat
+    if self.concat:
+      self.ch_fin = ch_in*2*2
     else:
-      self.layer2 = nn.Sequential(
-        nn.Conv2d(ch_out, ch_out, kernel_size = 3, stride = 1, padding = 1, bias = True),
-        nn.InstanceNorm2d(ch_out),
-        nn.Tanh()
-      )
-  def forward(self, x, skip_x):
-    if self.film:
-      x = self.film_layer(x, skip_x)
-    
-    return self.layer2(self.layer1(x))
-
-class filmUnet(nn.Module):
-  def __init__(self, ch_in):
-    super(filmUnet, self).__init__()
-    self.ch_in = ch_in
-    self.first_conv_block = nn.Sequential(
-        nn.Conv2d(ch_in, 32, kernel_size = 3, stride = 1, padding = 1, bias = True),
-        nn.InstanceNorm2d(32),
-        nn.Tanh(),
-        nn.Conv2d(32, 32, kernel_size = 3, stride = 1, padding = 1, bias = True),
-        nn.InstanceNorm2d(32),
-        nn.Tanh()
+      self.ch_fin = ch_in*2
+    self.model = nn.Sequential(
+        conv(ch_in, channel_out = 128, kernel_size = 5, stride = 2, padding = 2),
+        conv(128, 128, 3, 2, 1),
+        conv(128, 128, 3, 2, 1),
+        conv(128, 128, 3, 2, 1),
+        conv(128, self.ch_fin, 3, 1, 1) ## skip-connection에 의해서 concat되어서 channel size가 2배가 되는 상황
     )
-    self.first_downsample = nn.MaxPool2d(kernel_size = 2)
-    self.second_down_block = UNetConvBlock(32, 64, film = True, dec = False)
-    self.second_downsample = nn.MaxPool2d(kernel_size = 2)
-    
-    self.bridge = UNetConvBlock(64, 128, film = True, dec = False)
-
-    self.first_upsample = nn.ConvTranspose2d(128, 64, kernel_size = 2, stride = 2)
-    self.first_up_bridge = UNetConvBlock(128, 64, film = True, dec = True)
-    self.second_upsample = nn.ConvTranspose2d(64, 32, kernel_size = 2, stride = 2)
-    
-    self.tail = UNetConvBlock(64, 32, film = True, dec = True, final = True)
-
+    self.gap = nn.AdaptiveAvgPool2d(1) ## alpha, beta
   def forward(self, x):
-    ## Encoder ##
-    first_conv = self.first_conv_block(x)
-    d1 = self.first_downsample(first_conv)
-    o1 = self.second_down_block(d1, None)
-    d2 = self.second_downsample(o1)
-    ## Bridge ##
-    o2 = self.bridge(d2, None)
-    ## Decoder ##
-    u1 = self.first_upsample(o2)
-    o3 = self.first_up_bridge(u1, o1)
-    u2 = self.second_upsample(o3)
-    o4 = self.tail(u2, first_conv)
-    ## Denoised Output ##
-    return o4
+    return self.gap(self.model(x))
+
+class FiLMLayer(nn.Module):
+  def __init__(self, ch_in, concat = False):
+    # [32, 64]
+    super(FiLMLayer, self).__init__()
+    self.concat = concat
+    self.feature_extractor = FeatureExtractor(ch_in, self.concat)
+  def forward(self, x, skip_x):
+    batch_size, c, w, h = x.shape
+
+    film_vector = self.feature_extractor(x)
+    if self.concat:
+      cat = torch.cat((x, skip_x), dim = 1)
+      film_vector = film_vector.view(batch_size, c*2, 2, 1)
+      for i in range(2*c):
+        beta = film_vector[:, i, 0, :]
+        gamma = film_vector[:, i, 1, :]
+        beta = beta.view(cat.size(0), 1, 1)
+        gamma = gamma.view(cat.size(0), 1, 1)
+        cat[:, i, :, :] = cat[:, i, :, :] * gamma + beta
+      return cat
+    else:
+      film_vector = film_vector.view(batch_size, c,2, 1)
+      for i in range(c):
+        beta = film_vector[:, i, 0, :]
+        gamma = film_vector[:, i, 1, :]
+        beta = beta.view(x.size(0), 1, 1)
+        gamma = gamma.view(x.size(0), 1, 1)
+        x[:, i, :, :] = x[:, i, :, :] * gamma + beta
+      return x
 
 
+   
 
+    
+    # x : input feature map (made by the convolution layer)
 
-
-
-
+    
+if __name__ == "__main__":
+  sample = torch.zeros(size = (2, 1, 512, 512))
+  fe = FeatureExtractor(1, concat = False)
+  out = fe(sample)
+  print(out.shape) ## (2, 128, 1, 1)
