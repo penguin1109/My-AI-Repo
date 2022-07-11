@@ -38,25 +38,27 @@ class FiLMLayer(nn.Module):
     batch_size, c, w, h = x.shape
 
     film_vector = self.feature_extractor(x)
+
+    out_list = []
     if self.concat:
       cat = torch.cat((x, skip_x), dim = 1)
       film_vector = film_vector.view(batch_size, c*2, 2, 1)
       for i in range(2*c):
-        beta = film_vector[:, i, 0, :]
-        gamma = film_vector[:, i, 1, :]
+        beta = film_vector[:, i, 0, :].clone()
+        gamma = film_vector[:, i, 1, :].clone()
         beta = beta.view(cat.size(0), 1, 1)
         gamma = gamma.view(cat.size(0), 1, 1)
-        cat[:, i, :, :] = cat[:, i, :, :] * gamma + beta
-      return cat
+        out_list.append(cat[:, i, :, :].clone() * gamma + beta)
     else:
       film_vector = film_vector.view(batch_size, c,2, 1)
       for i in range(c):
-        beta = film_vector[:, i, 0, :]
-        gamma = film_vector[:, i, 1, :]
+        beta = film_vector[:, i, 0, :].clone()
+        gamma = film_vector[:, i, 1, :].clone()
         beta = beta.view(x.size(0), 1, 1)
         gamma = gamma.view(x.size(0), 1, 1)
-        x[:, i, :, :] = x[:, i, :, :] * gamma + beta
-      return x
+        out_list.append(x[:, i, :, :].clone() * gamma + beta)
+    out = torch.stack(out_list, dim = 1)
+    return out
 
 
    
