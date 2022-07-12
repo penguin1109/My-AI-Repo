@@ -1,11 +1,11 @@
 ## denoiser_unet_test/jihye_trainer_entry.py
 
 import os
-os.environ["AWS_ACCESS_KEY_ID"] = "yonghyun"
-os.environ["AWS_SECRET_ACCESS_KEY"] = "gausslabs"
-os.environ["MLFLOW_S3_IGNORE_TLS"] = "1"
+os.environ["AWS_ACCESS_KEY_ID"] = ""
+os.environ["AWS_SECRET_ACCESS_KEY"] = ""
+os.environ["MLFLOW_S3_IGNORE_TLS"] = ""
 os.environ[
-    "MLFLOW_S3_ENDPOINT_URL"] = "http://aims-object-storage-basic-dev.api.sddc-gl.skhynix.com:80"
+    "MLFLOW_S3_ENDPOINT_URL"] = ""
 
 import sys, json, hydra
 from hydra.core.hydra_config import HydraConfig
