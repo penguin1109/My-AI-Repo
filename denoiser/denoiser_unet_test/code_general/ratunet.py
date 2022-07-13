@@ -63,11 +63,14 @@ class SelfAttention(nn.Module):
 class EncBlock(nn.Module):
   def __init__(self, ch):
     super(EncBlock, self).__init__()
-    self.conv1 = nn.Conv2d(ch, ch, kernel_size = 3, stride = 1, padding = 1)
-    self.conv2 = nn.Conv2d(ch, ch, kernel_size = 3, stride = 1, padding = 1)
+    self.conv = nn.Sequential(
+        nn.Conv2d(ch, ch, kernel_size = 3, stride = 1, padding = 1),
+        nn.BatchNorm2d(ch), nn.PReLU(),
+        nn.Conv2d(ch, ch, kernel_size = 3, stride = 1, padding = 1),
+        nn.BatchNorm2d(ch), nn.PReLU())
     self.identity = nn.Conv2d(ch, ch, kernel_size = 1, stride = 1, padding = 0)
   def forward(self, x):
-    out = self.conv2(self.conv1(x))
+    out = self.conv(x)
     skip = self.identity(x)
     return out, skip
 
@@ -76,8 +79,11 @@ class DecBlock(nn.Module):
     super(DecBlock, self).__init__()
     self.conv = nn.Sequential(
         nn.Conv2d(ch, ch, kernel_size = 3, stride =1, padding = 1),
+        nn.BatchNorm2d(ch), nn.PReLU(),
         nn.Conv2d(ch, ch, kernel_size = 3, stride = 1, padding = 1),
-        nn.Conv2d(ch, ch, kernel_size = 3, stride = 1, padding = 1))
+        nn.BatchNorm2d(ch), nn.PReLU(),
+        nn.Conv2d(ch, ch, kernel_size = 3, stride = 1, padding = 1),
+        nn.BatchNorm2d(ch), nn.PReLU())
   def forward(self, x, skip):
     out = self.conv(x)
     return torch.cat((out, x), dim = 1)
