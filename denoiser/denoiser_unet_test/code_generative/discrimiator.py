@@ -3,23 +3,26 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-class Single_Discriminator(nn.Module):
+class Conv_Discriminator(nn.Module):
   def __init__(self, ch_in = 1):
-    super(Single_Discriminator, self).__init__()
+    super(Conv_Discriminator, self).__init__()
     def discriminator_block(ch_in, ch_out, normalization = True):
-      layers = [nn.Conv2d(ch_in, ch_out, kernel_size = 5, stride = 2, padding = 2)]
+      layers = [nn.Conv2d(ch_in, ch_out, kernel_size = 4, stride = 2, padding = 1)]
       if normalization:
         layers.append(nn.InstanceNorm2d(ch_out))
       layers.append(nn.LeakyReLU(0.2, inplace = True))
       return layers
   
     self.model = nn.Sequential(
-        *discriminator_block(ch_in, 64, normalization = False),
+        *discriminator_block(ch_in, 8, normalization = False),
+        *discriminator_block(8, 16),
+        *discriminator_block(16, 32),
+        *discriminator_block(32, 64),
         *discriminator_block(64, 128),
         *discriminator_block(128, 256),
         *discriminator_block(256, 512),
         nn.ZeroPad2d((1, 0, 1, 0)),
-        nn.Conv2d(512, 1, kernel_size = 5, stride = 1, padding = 2, bias = False),
+        nn.Conv2d(512, 1, kernel_size = 5, stride = 1, padding = 0, bias = False),
         nn.Tanh()
     )
 
@@ -44,6 +47,7 @@ class Discriminator(nn.Module):
     out = self.model(flat)
     return out
 
+"""
 class Double_Discriminator(nn.Module):
   def __init__(self):
     super(Double_Discriminator, self).__init__()
@@ -55,3 +59,4 @@ class Double_Discriminator(nn.Module):
     o2 = self.D2(x2)
   
     return o1, o2
+"""
